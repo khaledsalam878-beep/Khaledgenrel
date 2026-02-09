@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الباشمدرس :: محمد الجارم 📐</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { mathblue: '#2563eb', gold: '#eab308' } } }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+        body { font-family: 'Cairo', sans-serif; transition: background 0.3s; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .active-tab { border-bottom: 3px solid #2563eb; background-color: rgba(37, 99, 235, 0.1); color: #2563eb !important; }
+        #loginModal { display: flex; }
+        #appContainer { filter: blur(5px); pointer-events: none; transition: 0.3s; }
+        body.logged-in #loginModal { display: none; }
+        body.logged-in #appContainer { filter: none; pointer-events: auto; }
+        /* ستايل شاشة القفل الخاصة بخالد */
+        #lockScreen { display:none; position:fixed; inset:0; background:#0f172a; z-index:99999; color:white; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px; }
+    </style>
+</head>
+<body class="bg-gray-100 text-slate-800 dark:bg-slate-900 dark:text-gray-100">
+
+    <div id="lockScreen">
+        <h1 style="font-size: 80px;">🛑</h1>
+        <h2 class="text-2xl font-black text-blue-500 mb-4">نظام الباشمدرس متوقف</h2>
+        <p id="lockMsg" class="mb-8 text-gray-400 max-w-sm font-bold"></p>
+        <a href="https://wa.me/20123456789" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl font-bold transition shadow-lg">تواصل مع م/ خالد للتفعيل 💬</a>
+    </div>
+
+    <div id="loginModal" class="fixed inset-0 bg-slate-900 z-[9999] flex flex-col items-center justify-center text-white">
+        <div class="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-mathblue text-center max-w-sm w-full mx-4">
+            <h1 class="text-3xl font-black text-mathblue mb-2">نظام الباشمدرس</h1>
+            <p class="text-gray-400 mb-6 text-sm">أهلاً بك يا مستر محمد الجارم</p>
+            <input type="password" id="sysPass" placeholder="كلمة السر" class="w-full p-3 rounded-xl bg-slate-700 border border-slate-600 text-center text-white text-xl outline-none focus:border-mathblue mb-4">
+            <button onclick="checkLogin()" class="w-full bg-mathblue text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition">دخول للنظام 📐</button>
+            <p id="loginErr" class="text-red-500 text-xs mt-3 hidden">كلمة السر غلط يا مستر!</p>
+        </div>
+    </div>
+
+    <div id="appContainer" class="pb-20">
+        <header class="bg-white dark:bg-slate-800 shadow-lg sticky top-0 z-50">
+            <div class="container mx-auto px-4 py-3">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-full bg-mathblue text-white flex items-center justify-center font-black text-xl border-2 border-white shadow-lg">∑</div>
+                        <div>
+                            <h1 class="font-black text-lg leading-tight">الباشمدرس <span class="text-mathblue">محمد الجارم</span></h1>
+                            <span class="text-[10px] text-blue-600 font-bold bg-blue-100 px-2 py-0.5 rounded-full dark:bg-blue-900 dark:text-blue-300">نظام الرياضيات الذكي 📐</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="startScanner()" class="bg-mathblue text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 flex items-center gap-2">📷 مسح كود</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3 mb-2">
+                    <div class="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-xl text-center">
+                        <h3 class="text-[10px] text-blue-600 font-bold">إجمالي الطلاب</h3>
+                        <p id="count-total" class="text-xl font-black text-blue-800 dark:text-blue-100">0</p>
+                    </div>
+                    <div class="bg-green-50 dark:bg-green-900/30 p-3 rounded-xl text-center">
+                        <h3 class="text-[10px] text-green-600 font-bold">حضور اليوم</h3>
+                        <p id="count-present" class="text-xl font-black text-green-800 dark:text-green-100">0</p>
+                    </div>
+                    <div class="bg-red-50 dark:bg-red-900/30 p-3 rounded-xl text-center">
+                        <h3 class="text-[10px] text-red-600 font-bold">الغياب</h3>
+                        <p id="count-absent" class="text-xl font-black text-red-800 dark:text-red-100">0</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="container mx-auto px-4 mt-6 max-w-6xl no-print">
+            <div class="flex bg-white dark:bg-slate-800 rounded-2xl shadow-sm border overflow-hidden mb-6 overflow-x-auto">
+                <button onclick="showTab('students')" id="btn-students" class="tab-btn active-tab flex-1 py-4 font-bold text-sm">👥 الطلاب</button>
+                <button onclick="showTab('attendance')" id="btn-attendance" class="tab-btn flex-1 py-4 font-bold text-sm border-x">📅 الحضور</button>
+                <button onclick="showTab('grades')" id="btn-grades" class="tab-btn flex-1 py-4 font-bold text-sm">📊 الدرجات</button>
+                <button onclick="showTab('reports')" id="btn-reports" class="tab-btn flex-1 py-4 font-bold text-sm text-red-500">⚠️ الغياب</button>
+            </div>
+
+            <section id="students" class="tab-content active">
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border mb-6 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-2 h-full bg-mathblue"></div>
+                    <h2 class="font-bold mb-4 text-lg">➕ تسجيل طالب جديد</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                        <input type="text" id="stdName" placeholder="اسم الطالب" class="p-3 border rounded-xl dark:bg-slate-700">
+                        <input type="tel" id="stdPhone" placeholder="رقم ولي الأمر" class="p-3 border rounded-xl dark:bg-slate-700">
+                        <input type="text" id="stdCenter" placeholder="المجموعة" class="p-3 border rounded-xl dark:bg-slate-700">
+                        <input type="text" id="stdNotes" placeholder="ملاحظات" class="p-3 border rounded-xl dark:bg-slate-700">
+                        <button onclick="addStudent()" class="bg-mathblue text-white font-bold rounded-xl p-3">إضافة 📐</button>
+                    </div>
+                </div>
+                <div id="studentsGrid" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+            </section>
+            </main>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAaUUYu4O3NkXF-4HXTna9HyEJXEIp6F3I",
+            authDomain: "mohammed-algarem.firebaseapp.com",
+            databaseURL: "https://mohammed-algarem-default-rtdb.firebaseio.com",
+            projectId: "mohammed-algarem",
+            storageBucket: "mohammed-algarem.firebasestorage.app",
+            messagingSenderId: "85352321387",
+            appId: "1:85352321387:web:2df25e83470b50a21cfc2e"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // 🟢 كود الحماية (بيربط بنسخة خالد) 🟢
+        db.ref('app_settings').on('value', (snap) => {
+            const config = snap.val();
+            const lockScreen = document.getElementById('lockScreen');
+            if (config && config.is_active === false) {
+                lockScreen.style.display = 'flex';
+                document.getElementById('lockMsg').innerText = config.message;
+            } else {
+                lockScreen.style.display = 'none';
+            }
+        });
+
+        // باقي وظائف البرنامج (نفس الأكواد القديمة تماماً)
+        function checkLogin() {
+            if(document.getElementById('sysPass').value === "1234") { 
+                document.body.classList.add('logged-in');
+                localStorage.setItem('jaram_logged', 'true');
+            } else {
+                document.getElementById('loginErr').classList.remove('hidden');
+            }
+        }
+        if(localStorage.getItem('jaram_logged') === 'true') document.body.classList.add('logged-in');
+
+        // جلب الطلاب والوظائف التانية... (أكمل باقي الـ Functions بتاعتك هنا)
+        let allStudents = [];
+        db.ref('students').on('value', (snapshot) => {
+            const data = snapshot.val();
+            allStudents = data ? Object.values(data) : [];
+            updateUI();
+        });
+
+        function updateUI() {
+            const grid = document.getElementById('studentsGrid');
+            grid.innerHTML = allStudents.map(s => `
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border flex flex-col items-center">
+                    <div id="qr-${s.id}" class="bg-white p-2 rounded-lg mb-3"></div>
+                    <h4 class="font-bold">${s.name}</h4>
+                    <p class="text-xs text-blue-600">${s.center}</p>
+                </div>
+            `).join('');
+            allStudents.forEach(s => {
+                const el = document.getElementById(`qr-${s.id}`);
+                if(el) { el.innerHTML = ''; new QRCode(el, { text: String(s.id), width: 80, height: 80 }); }
+            });
+        }
+        
+        function showTab(id) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
+            document.getElementById(id).classList.add('active');
+            document.getElementById('btn-'+id).classList.add('active-tab');
+        }
+    </script>
+</body>
+</html>
